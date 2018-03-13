@@ -1,0 +1,285 @@
+service: cryptonova
+
+provider:
+  name: aws
+  runtime: nodejs6.10
+  stage: dev
+  region: eu-west-2
+  timeout: 60
+  memorySize: 2048
+  environment:
+    NODE_ENV: ${self:custom.stage}
+    DB_HOST: ${self:custom.env.DB_HOST}
+    DB_USER: ${self:custom.env.DB_USER}
+    DB_PASSWORD: ${self:custom.env.DB_PASSWORD}
+    DB_DATABASE: ${self:custom.env.DB_DATABASE}
+    API_URL: ${self:custom.env.API_URL}
+    CMC_TICKER_API_URL: ${self:custom.env.CMC_TICKER_API_URL}
+    CMC_GRAPH_API_URL: ${self:custom.env.CMC_GRAPH_API_URL}
+    CMC_COIN_URL: ${self:custom.env.CMC_COIN_URL}
+    CMC_IMAGE_URL: ${self:custom.env.CMC_IMAGE_URL}
+    S3_BUCKET: ${self:custom.env.S3_BUCKET}
+    JWT_SECRET: ${self:custom.env.JWT_SECRET}
+    HISTORIC_DATA_QUEUE_URL: ${self:custom.env.HISTORIC_DATA_QUEUE_URL}
+
+plugins:
+  - serverless-offline
+  - serverless-async-await
+
+package:
+  exclude:
+    - env.yml
+
+custom:
+  stage: ${opt:stage, self:provider.stage}
+  env: ${file(env.yml):${self:custom.stage}}
+
+functions:
+  # Coins
+  updateCoin:
+    handler: handlers/coins.updateCoin
+    events:
+      - http:
+          path: coins/{slug}
+          method: patch
+          cors: true
+          authorizer: authorizeAdmin
+
+  fetchCoins:
+    handler: handlers/coins.fetchCoins
+    memorySize: 3008
+    events:
+      - http:
+          path: coins
+          method: get
+          cors: true
+
+  fetchCoin:
+    handler: handlers/coins.fetchCoin
+    events:
+      - http:
+          path: coins/{slug}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                slug: true
+
+  fetchCoinPrices:
+    handler: handlers/coins.fetchCoinPrices
+    events:
+      - http:
+          path: coins/{slug}/prices
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                slug: true
+              querystrings:
+                date: false
+                days: false
+
+  storeCoins:
+    handler: handlers/coins.storeCoins
+    timeout: 60
+    events:
+      - schedule:
+          rate: rate(1 hour)
+
+  storeCoinData:
+    handler: handlers/coins.storeCoinData
+    timeout: 120
+
+  updateCoinData:
+    handler: handlers/coins.updateCoinData
+    timeout: 120
+    events:
+      - schedule:
+          rate: rate(5 minutes)
+
+  downloadImage:
+    handler: handlers/coins.downloadImage
+    timeout: 60
+    events:
+      - schedule:
+          rate: rate(5 minutes)
+
+  fetchBlogFeed:
+    handler: handlers/coins.fetchBlogFeed
+    events:
+      - http:
+          path: coins/{slug}/feed
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                slug: true
+
+  searchCoin:
+    handler: handlers/coins.searchCoin
+    memorySize: 3008
+    events:
+      - http:
+          path: coins/search
+          method: get
+          request:
+            parameters:
+              querystrings:
+                query: true
+
+  # Auth
+  authorize:
+    handler: handlers/auth.authorize
+
+  authorizeAdmin:
+    handler: handlers/auth.authorizeAdmin
+
+  authRegister:
+    handler: handlers/auth.register
+    events:
+      - http:
+          path: auth/register
+          method: post
+          cors: true
+
+  authLogin:
+    handler: handlers/auth.login
+    events:
+      - http:
+          path: auth/login
+          method: post
+          cors: true
+
+  authRefresh:
+    handler: handlers/auth.refresh
+    events:
+      - http:
+          path: auth/refresh
+          method: get
+          cors: true
+          authorizer: authorize
+
+  # Users
+  fetchUser:
+    handler: handlers/users.fetchUser
+    events:
+      - http:
+          path: me
+          method: get
+          cors: true
+          authorizer: authorize
+
+  fetchUserCoins:
+    handler: handlers/users.fetchCoins
+    events:
+      - http:
+          path: me/coins
+          method: get
+          cors: true
+          authorizer: authorize
+
+  hasCoin:
+    handler: handlers/users.hasCoin
+    events:
+      - http:
+          path: me/coins/{id}
+          method: get
+          cors: true
+          authorizer: authorize
+
+  fetchCoinTransactions:
+    handler: handlers/users.fetchCoinTransactions
+    events:
+      - http:
+          path: me/coins/{id}/transactions
+          method: get
+          cors: true
+          authorizer: authorize
+
+  fetchBalance:
+    handler: handlers/users.fetchBalance
+    events:
+      - http:
+          path: me/balance
+          method: get
+          cors: true
+          authorizer: authorize
+
+  storeBalances:
+    handler: handlers/users.storeBalances
+    timeout: 120
+    events:
+      - schedule:
+          rate: rate(6 hours)
+
+  storeBalance:
+    handler: handlers/users.storeBalance
+    timeout: 30
+
+  fetchBalanceHistory:
+    handler: handlers/users.fetchBalanceHistory
+    events:
+      - http:
+          path: me/balance/history
+          method: get
+          cors: true
+          authorizer: authorize
+
+  fetchPortfolio:
+    handler: handlers/users.fetchPortfolio
+    events:
+      - http:
+          path: me/portfolio
+          method: get
+          cors: true
+          authorizer: authorize
+
+  toggleCoin:
+    handler: handlers/users.toggleCoin
+    events:
+      - http:
+          path: me/coins/{id}
+          method: post
+          cors: true
+          authorizer: authorize
+      - http:
+          path: me/coins/{id}
+          method: delete
+          cors: true
+          authorizer: authorize
+
+  storeHexColor:
+    handler: handlers/coins.storeHexColor
+    events:
+      - schedule:
+          rate: rate(5 minutes)
+
+  # Transactions
+  storeTransaction:
+    handler: handlers/transactions.storeTransaction
+    events:
+      - http:
+          path: coins/{slug}/transactions
+          method: post
+          cors: true
+          authorizer: authorize
+
+  deleteTransaction:
+    handler: handlers/transactions.deleteTransaction
+    events:
+      - http:
+          path: transactions/{id}
+          method: delete
+          cors: true
+          authorizer: authorize
+
+  # Queue
+  storeCoinDataQueue:
+    handler: handlers/queue.storeCoinData
+    timeout: 120
+    events:
+      - schedule:
+          rate: rate(5 minutes)
